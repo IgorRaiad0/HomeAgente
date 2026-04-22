@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
+import httpx
 import re
 from pydantic import BaseModel
 from integrations.ha_rest import get_states, call_service
 from typing import List, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
 import shutil
 import os
 from llm.transcriber import transcrever_audio
@@ -248,6 +251,113 @@ def delete_routine(entity_id: str):
 async def rename_device_alias(data: dict):
     return await update_device(data)
 
+# ---- CONTROLLERS DE CÂMERA E MÍDIA ----
+
+@router.get("/camera/{entity_id}/stream")
+async def camera_stream(entity_id: str):
+    try:
+        from integrations.camera_service import HAService
+        ha = HAService()
+        data = await ha.get_live_stream_url(entity_id)
+        if not data:
+            raise HTTPException(status_code=503, detail="Stream não disponível para esta câmera.")
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Erro ao obter stream: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/camera/{entity_id}/proxy_stream")
+async def proxy_mjpeg_stream(entity_id: str):
+    """Faz proxy do MJPEG stream do HA para evitar CORS no navegador."""
+    from fastapi.responses import StreamingResponse
+    from integrations.camera_service import HAService
+    import httpx
+
+    ha = HAService()
+    data = await ha.get_live_stream_url(entity_id)
+    if not data:
+        raise HTTPException(status_code=503, detail="Stream não disponível.")
+
+    async def stream_generator():
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream("GET", data["stream_url"]) as resp:
+                async for chunk in resp.aiter_bytes(4096):
+                    yield chunk
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="multipart/x-mixed-replace; boundary=ffmpeg"
+    )
+
+@router.post("/camera/{entity_id}/snapshot")
+async def take_snapshot(entity_id: str):
+    try:
+        from integrations.camera_service import HAService
+        ha = HAService()
+        result = await ha.take_snapshot(entity_id)
+        return result
+    except Exception as e:
+        print(f"Erro ao tirar snapshot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/camera/{entity_id}/record")
+async def toggle_recording(entity_id: str, payload: dict):
+    try:
+        from integrations.camera_service import HAService
+        ha = HAService()
+        duration = payload.get("duration", 30)
+        result = await ha.start_recording(entity_id, duration)
+        return result
+    except Exception as e:
+        print(f"Erro ao gravar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/camera/media/proxy")
+async def proxy_ha_media(path: str):
+    """Proxy autenticado para mídias do HA (evita expor token no frontend)."""
+    from fastapi.responses import StreamingResponse
+    from integrations.camera_service import HAService
+    ha = HAService()
+    ha_url = f"{ha.url}/media/local/{path}"
+    media_type = "video/mp4" if path.endswith(".mp4") else "image/jpeg"
+
+    async def stream():
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", ha_url, headers=ha.headers) as resp:
+                async for chunk in resp.aiter_bytes(8192):
+                    yield chunk
+
+    return StreamingResponse(stream(), media_type=media_type)
+
+@router.get("/camera/{entity_id}/gallery")
+async def get_camera_gallery(entity_id: str):
+    try:
+        from integrations.camera_service import HAService
+        ha = HAService()
+        media = await ha.get_camera_gallery(entity_id)
+        return {"media": media}
+    except Exception as e:
+        print(f"Erro ao buscar galeria: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/media/{file_path:path}")
+async def serve_media(file_path: str):
+    from api.media_manager import STORAGE_PATH
+    import os
+    
+    full_path = os.path.join(STORAGE_PATH, file_path)
+    
+    # Prevenção de Path Traversal
+    if not os.path.abspath(full_path).startswith(os.path.abspath(STORAGE_PATH)):
+         raise HTTPException(status_code=403, detail="Acesso negado.")
+         
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
+        
+    return FileResponse(full_path)
+
 @router.get("/devices/grouped")
 async def get_grouped_devices():
     """
@@ -302,11 +412,21 @@ async def get_grouped_devices():
 
             # 3. Eleição do Líder
             current_main = grouped[group_key]["main_entity"]
-            prio_map = {"light": 10, "switch": 9, "camera": 8, "climate": 7, "fan": 6, "lock": 5}
+            prio_map = {"camera": 10, "light": 9, "switch": 8, "climate": 7, "fan": 6, "lock": 5}
             curr_prio = prio_map.get(domain, 0)
             main_prio = prio_map.get(current_main["domain"] if current_main else "", -1)
 
-            if not current_main or curr_prio > main_prio:
+            # Desempate: prefere entidade disponível (não unavailable)
+            curr_available = entity["state"] != "unavailable"
+            main_available = (current_main["state"] != "unavailable") if current_main else False
+
+            should_replace = (
+                not current_main
+                or curr_prio > main_prio
+                or (curr_prio == main_prio and curr_available and not main_available)
+            )
+
+            if should_replace:
                 grouped[group_key]["main_entity"] = entity_data
                 grouped[group_key]["name"] = entity_data["name"]
                 grouped[group_key]["icon"] = entity_data["attributes"].get("icon", "mdi:cube-outline")
