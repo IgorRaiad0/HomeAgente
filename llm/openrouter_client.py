@@ -45,4 +45,4 @@ def ask_llm(instrucoes_sistema, comando_usuario):
 # Teste rápido 
 if __name__ == "__main__":
     print(f"Testando conexão com o modelo: {OPENROUTER_MODEL}")
-    print(ask_llm("Você é o Jarvis. Responda apenas com uma palavra.", "Diga olá."))
+    print(ask_llm("Você é um assistente virtual. Responda apenas com uma palavra.", "Diga olá."))

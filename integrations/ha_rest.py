@@ -16,16 +16,17 @@ def get_states():
         print(f"Erro get_states: {e}")
         return []
 
-def call_service(domain, service, entity_id):
+def call_service(domain, service, entity_id, params=None):
     """
-    Versão unificada e corrigida.
-    Remove espaços, limpa a URL e executa o POST real.
+    Versão unificada e corrigida com suporte a parâmetros extras.
     """
     entity_id = entity_id.strip()
     real_domain = entity_id.split('.')[0] if '.' in entity_id else domain
     
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api/services/{real_domain}/{service}"
     payload = {"entity_id": entity_id}
+    if params:
+        payload.update(params)
     
     print(f"--- [DEBUG HA] URL: {url} | Payload: {payload} ---")
     

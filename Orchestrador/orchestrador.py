@@ -1,4 +1,5 @@
 from llm.openrouter_client import ask_llm
+from config import AGENT_NAME
 from tools.homeassistant_tools import turn_on, turn_off
 from integrations.ha_rest import get_states, create_automation, create_script, call_service
 from tools.chroma_tools import get_templates
@@ -6,7 +7,7 @@ from integrations.ha_history import get_entity_history
 from integrations.telegram_bot import send_telegram_message
 from tools.chroma_tools import add_template, get_templates, delete_template
 
-# 0. MEMÓRIA GLOBAL (Para o Jarvis lembrar do que acabou de falar)
+# 0. MEMÓRIA GLOBAL (Para o agente lembrar do que acabou de falar)
 historico_conversa = []
 
 def handle_command(user_input):
@@ -40,7 +41,7 @@ def handle_command(user_input):
 
     # 3. INSTRUÇÕES DO SISTEMA (As Regras Absolutas)
     instrucoes_sistema = f"""
-    Você é o cérebro do Home Assistant. Você tem controle total e visão em tempo real da casa.
+    Você é o {AGENT_NAME}, o cérebro inteligente do Home Assistant. Você tem controle total e visão em tempo real da casa.
 
     ESTADO ATUAL DA CASA (Contexto):
     {contexto_dispositivos}
@@ -82,9 +83,9 @@ def handle_command(user_input):
     historico_conversa.append(f"Usuário: {user_input}")
     
     # Salva o que ele respondeu (limpando a parte da ACTION para a memória ficar legível)
-    fala_do_jarvis = response.split("ACTION:")[0].strip()
-    if fala_do_jarvis:
-        historico_conversa.append(f"Bimo: {fala_do_jarvis}")
+    fala_do_agente = response.split("ACTION:")[0].strip()
+    if fala_do_agente:
+        historico_conversa.append(f"{AGENT_NAME}: {fala_do_agente}")
 
     # 4. PROCESSAMENTO DE AÇÕES (
     if "ACTION:" in response:
@@ -161,10 +162,10 @@ def handle_command(user_input):
         
         # --- RETORNO INTELIGENTE ---
         # Se houve um texto antes da ACTION, priorizamos mostrar esse texto (ex: listas, explicações)
-        fala_do_jarvis = response.split("ACTION:")[0].strip()
+        fala_do_agente = response.split("ACTION:")[0].strip()
         
-        if len(fala_do_jarvis) > 5:
-            return fala_do_jarvis
+        if len(fala_do_agente) > 5:
+            return fala_do_agente
             
         if resultados:
             return "Comandos enviados com sucesso!"

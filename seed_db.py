@@ -1,7 +1,7 @@
 # seed_db.py
 from tools.chroma_tools import add_template
 
-print("--- [CHROMA] Iniciando injeção de Habilidades no Jarvis... ---")
+print("--- [CHROMA] Iniciando injeção de Habilidades no Agente... ---")
 
 # 1. Template de Automação (Agendamento de Horário)
 auto_template = """
@@ -25,7 +25,7 @@ add_template("criar_cena", scene_template)
 notif_template = """
 {
   "trigger": {"platform": "state", "entity_id": "light.sala", "from": "off", "to": "on"},
-  "action": {"service": "notify.mobile_app_iphone", "data": {"message": "Jarvis: A luz da sala foi ligada!"}}
+  "action": {"service": "notify.mobile_app_iphone", "data": {"message": "Assistente: A luz da sala foi ligada!"}}
 }
 """
 add_template("notificacao", notif_template)

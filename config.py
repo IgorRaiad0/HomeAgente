@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     
     OPENROUTER_API_KEY: str
     OPENROUTER_MODEL: str = "qwen/qwen3-next-80b-a3b-instruct:free"
+    AGENT_NAME: str = "Assistente"
+    GROQ_API_KEY: str
     
     HOME_ASSISTANT_URL: str
     HOME_ASSISTANT_TOKEN: str
@@ -39,6 +41,8 @@ except Exception as e:
 # Assim, arquivos que fazem 'from config import GEMINI_API_KEY' continuam funcionando.
 OPENROUTER_API_KEY = settings.OPENROUTER_API_KEY
 OPENROUTER_MODEL = settings.OPENROUTER_MODEL
+AGENT_NAME = settings.AGENT_NAME
+GROQ_API_KEY = settings.GROQ_API_KEY
 
 HOME_ASSISTANT_URL = settings.HOME_ASSISTANT_URL
 HOME_ASSISTANT_TOKEN = settings.HOME_ASSISTANT_TOKEN

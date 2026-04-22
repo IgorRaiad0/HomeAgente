@@ -7,8 +7,9 @@ import uvicorn
 
 # Importa a sua API
 from api.routes import router as api_router
-# Importa o seu observador
-from integrations.ha_websocket import start_observer
+# Importa o seu observador e gerenciador de conexões
+from integrations.ha_websocket import start_observer, handle_frontend_ws
+from fastapi import WebSocket
 
 # ---------------------------------------------------------
 # GERENCIADOR DE TAREFAS DE FUNDO
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DO SERVIDOR WEB (FASTAPI)
 # ---------------------------------------------------------
-app = FastAPI(title="Jarvis Central API", version="1.0", lifespan=lifespan)
+app = FastAPI(title="HomeAgente Central API", version="1.0", lifespan=lifespan)
 
 # CORS (Permite o React Native conversar com o Python)
 app.add_middleware(
@@ -46,11 +47,19 @@ app.add_middleware(
 )
 
 # Acopla as rotas da IA
-app.include_router(api_router, prefix="/api", tags=["Jarvis Interface"])
+app.include_router(api_router, prefix="/api", tags=["HomeAgente Interface"])
 
 @app.get("/")
 async def root():
     return {"status": "Sistemas Online. API e Monitoramento operando perfeitamente."}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    Rota WebSocket para o Frontend (EdgeHomeUI). 
+    Mantém o app sincronizado com as mudanças físicas.
+    """
+    await handle_frontend_ws(websocket)
 
 if __name__ == "__main__":
     # Permite rodar executando "python main.py" direto
