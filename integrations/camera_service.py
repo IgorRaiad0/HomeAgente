@@ -8,6 +8,18 @@ class HAService:
         self.url = HOME_ASSISTANT_URL.rstrip('/')
         self.headers = {"Authorization": f"Bearer {HOME_ASSISTANT_TOKEN}"}
 
+    async def get_state(self, entity_id: str) -> str:
+        """Lê o estado atual de qualquer entidade no HA."""
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"{self.url}/api/states/{entity_id}",
+                headers=self.headers,
+                timeout=10.0
+            )
+            if res.status_code == 200:
+                return res.json().get("state")
+        return "unknown"
+
     async def get_live_stream_url(self, entity_id: str) -> dict | None:
         """Retorna a URL do proxy MJPEG e o token de acesso da câmera."""
         async with httpx.AsyncClient() as client:
@@ -51,7 +63,7 @@ class HAService:
                 f"{self.url}/api/services/camera/record",
                 headers=self.headers,
                 json={"entity_id": entity_id, "filename": ha_filename, "duration": duration},
-                timeout=15.0
+                timeout=60.0
             )
         return {"status": "recording_started", "saved_path": ha_filename}
 
@@ -95,6 +107,14 @@ class HAService:
 
         all_media.sort(key=lambda x: x["title"], reverse=True)
         return all_media
+
+    async def get_latest_video(self, entity_id: str) -> dict | None:
+        """Busca o vídeo mais recente gravado no HA."""
+        gallery = await self.get_camera_gallery(entity_id)
+        for item in gallery:
+            if item.get("type") == "video":
+                return item
+        return None
 
     async def call_service(self, domain, service, data):
         async with httpx.AsyncClient() as client:

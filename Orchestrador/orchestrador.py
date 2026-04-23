@@ -10,7 +10,7 @@ from tools.chroma_tools import add_template, get_templates, delete_template
 # 0. MEMÓRIA GLOBAL (Para o agente lembrar do que acabou de falar)
 historico_conversa = []
 
-def handle_command(user_input):
+async def handle_command(user_input):
     global historico_conversa
     user_input_lower = user_input.lower()
     
@@ -70,11 +70,13 @@ def handle_command(user_input):
     16. TELEGRAM IMEDIATO (Envio de informações de agora): Se o usuário pedir para enviar uma lista, status, histórico de agora para o Telegram, você DEVE escrever todo o texto formatado na sua resposta e na ÚLTIMA LINHA colocar OBRIGATORIAMENTE: ACTION:telegram.send_message|enviar.
     17. O serviço telegram.send_message não existe dentro do Home Assistant, é uma ferramenta sua. Nunca o coloque dentro de um JSON de automação.
     18. Se o usuário pedir para enviar algo para o Telegram da memória recente, você DEVE reescrever a informação completa antes da ACTION, não seja vago.
+    19. Para tirar foto ou gravar vídeo de uma câmera, OBRIGATORIAMENTE responda: ACTION:camera_capture|entity_id|media_type (onde media_type é 'photo' ou 'video').
+    20. Para CONSULTAR o estado de qualquer dispositivo, use: ACTION:get_state|entity_id
+    21. RACIOCÍNIO LÓGICO: Quando o usuário perguntar sobre algo ("está ligado?", "está aberto?"), use ACTION:get_state antes de responder. Não invente respostas - consulte o estado real primeiro.
     """
 
     # --- A CHAMADA DA IA ---
-    # Agora enviamos as duas informações separadas!
-    response = ask_llm(instrucoes_sistema, user_input)
+    response = await ask_llm(instrucoes_sistema, user_input)
     
     if not response: 
         return "Desculpe, tive um problema ao processar sua solicitação."
@@ -145,6 +147,28 @@ def handle_command(user_input):
                         
                         delete_template(f"watch_{target_clean}") 
                         return f"Entendido. Removi o monitoramento de {target_clean}."
+
+                    # Consulta de Estado
+                    elif action == "get_state":
+                        from integrations.camera_service import HAService
+                        
+                        target_clean = target.split(" ")[0].split("\n")[0].strip()
+                        ha = HAService()
+                        estado = await ha.get_state(target_clean)
+                        return f"O estado de {target_clean} é: {estado}"
+
+                    # Captura de Câmera
+                    elif action == "camera_capture" and len(parts) >= 3:
+                        target_clean = target.split(" ")[0].split("\n")[0].strip()
+                        media_type = parts[2].strip()
+                        
+                        print(f"--- [LOG] Solicitando captura de {media_type} na {target_clean} ---")
+                        
+                        from tools.camera_tools import tool_camera_capture
+                        
+                        asyncio.create_task(tool_camera_capture(target_clean, media_type))
+                            
+                        return f"Certamente! Solicitada a captura de {media_type} na câmera. A mídia chegará no seu Telegram em instantes."
 
                     # Execução de Comandos (Universal: Luz, Ar, TV, Scripts)
                     else:

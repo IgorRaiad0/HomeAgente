@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     AGENT_NAME: str = "Assistente"
     GROQ_API_KEY: str
     
+    # Provider ativo: openrouter | gemini | grok | groq | anthropic
+    LLM_PROVIDER: str = "openrouter"
+    
+    # Configurações de cada provider
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GROK_API_KEY: str = ""
+    GROK_MODEL: str = "grok-3-mini"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
+    
     HOME_ASSISTANT_URL: str
     HOME_ASSISTANT_TOKEN: str
     
@@ -38,11 +49,18 @@ except Exception as e:
     raise
 
 # Re-exportamos as variáveis para manter compatibilidade com o restante do projeto
-# Assim, arquivos que fazem 'from config import GEMINI_API_KEY' continuam funcionando.
 OPENROUTER_API_KEY = settings.OPENROUTER_API_KEY
 OPENROUTER_MODEL = settings.OPENROUTER_MODEL
 AGENT_NAME = settings.AGENT_NAME
 GROQ_API_KEY = settings.GROQ_API_KEY
+
+LLM_PROVIDER = settings.LLM_PROVIDER
+GEMINI_API_KEY = settings.GEMINI_API_KEY
+GEMINI_MODEL = settings.GEMINI_MODEL
+GROK_API_KEY = settings.GROK_API_KEY
+GROK_MODEL = settings.GROK_MODEL
+ANTHROPIC_API_KEY = settings.ANTHROPIC_API_KEY
+ANTHROPIC_MODEL = settings.ANTHROPIC_MODEL
 
 HOME_ASSISTANT_URL = settings.HOME_ASSISTANT_URL
 HOME_ASSISTANT_TOKEN = settings.HOME_ASSISTANT_TOKEN

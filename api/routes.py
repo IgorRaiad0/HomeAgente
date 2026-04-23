@@ -26,8 +26,7 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
     try:
-        # Passa o texto do React Native pro seu orquestrador
-        result = handle_command(request.texto)
+        result = await handle_command(request.texto)
         return ChatResponse(resposta=result)
     except Exception as e:
         print(f"Erro no processamento: {e}")
@@ -58,7 +57,7 @@ async def voice_endpoint(file: UploadFile = File(...)):
              return ChatResponse(resposta="Desculpe, não consegui entender o áudio.")
 
         # 3. Envia o texto para o seu Orquestrador pensar e agir
-        resposta_agente = handle_command(texto_usuario)
+        resposta_agente = await handle_command(texto_usuario)
         
         # 4. Apaga o arquivo temporário para não lotar o PC
         # os.remove(caminho_temp)

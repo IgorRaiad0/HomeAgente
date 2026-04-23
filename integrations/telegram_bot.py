@@ -21,16 +21,30 @@ def send_telegram_message(message):
         return None
 
 def send_telegram_photo(photo_path, caption=""):
-    # Corrigido para garantir o prefixo /bot igual ao de mensagens
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     
     try:
         with open(photo_path, 'rb') as photo:
             files = {'photo': photo}
-            data = {'chat_id': TELEGRAM_CHAT_ID, 'caption': str(caption)[:1024]} # Legendas tem limite menor
+            data = {'chat_id': TELEGRAM_CHAT_ID, 'caption': str(caption)[:1024]}
             r = requests.post(url, files=files, data=data, timeout=20)
             r.raise_for_status()
             return r.json()
     except Exception as e:
         print(f"Erro ao enviar foto: {e}")
+        return None
+
+def send_telegram_video(video_path, caption=""):
+    """Envia vídeo pelo Telegram."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendVideo"
+    
+    try:
+        with open(video_path, 'rb') as video:
+            files = {'video': video}
+            data = {'chat_id': TELEGRAM_CHAT_ID, 'caption': str(caption)[:1024]}
+            r = requests.post(url, files=files, data=data, timeout=60)
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        print(f"Erro ao enviar vídeo: {e}")
         return None
