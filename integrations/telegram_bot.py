@@ -11,7 +11,7 @@ def send_telegram_message(message):
     }
     
     try:
-        r = requests.post(url, json=payload, timeout=10)
+        r = requests.post(url, json=payload, timeout=30)
         r.raise_for_status() 
         return r.json()
     except Exception as e:
@@ -27,7 +27,7 @@ def send_telegram_photo(photo_path, caption=""):
         with open(photo_path, 'rb') as photo:
             files = {'photo': photo}
             data = {'chat_id': TELEGRAM_CHAT_ID, 'caption': str(caption)[:1024]}
-            r = requests.post(url, files=files, data=data, timeout=20)
+            r = requests.post(url, files=files, data=data, timeout=60)
             r.raise_for_status()
             return r.json()
     except Exception as e:

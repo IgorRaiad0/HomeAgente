@@ -47,7 +47,6 @@ def clean_json(text):
 def create_automation(automation_id, name, trigger_str, action_str):
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api/config/automation/config/{automation_id}"
     try:
-        # Limpando as strings antes de converter
         trigger_clean = clean_json(trigger_str)
         action_clean = clean_json(action_str)
         
@@ -57,16 +56,15 @@ def create_automation(automation_id, name, trigger_str, action_str):
             "action": json.loads(action_clean),
             "mode": "single"
         }
-        r = requests.post(url, headers=headers, json=payload, timeout=10)
+        r = requests.put(url, headers=headers, json=payload, timeout=15)
         r.raise_for_status()
         return f"Automação '{name}' criada com sucesso!"
     except Exception as e:
-        return f"Erro ao criar automação: {e}\nJSON recebido: {action_str}"
+        return f"Erro ao criar automação: {e}\nJSON: {action_str}"
 
 def create_script(script_id, name, sequence_str):
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api/config/script/config/{script_id}"
     try:
-        # Limpando a string da sequência
         seq_clean = clean_json(sequence_str)
         
         payload = {
@@ -74,11 +72,11 @@ def create_script(script_id, name, sequence_str):
             "sequence": json.loads(seq_clean),
             "mode": "single"
         }
-        r = requests.post(url, headers=headers, json=payload, timeout=10)
+        r = requests.put(url, headers=headers, json=payload, timeout=15)
         r.raise_for_status()
         return f"Cena/Script '{name}' criado!"
     except Exception as e:
-        return f"Erro ao criar cena: {e}\nJSON recebido: {sequence_str}"
+        return f"Erro ao criar cena: {e}\nJSON: {sequence_str}"
     
 
 
