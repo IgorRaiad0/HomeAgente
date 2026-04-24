@@ -52,15 +52,32 @@ async def handle_command(user_input):
     {memoria_recente}
 
 DIRETRIZES:
-    1. Para LIGAR/DESLIGAR: ACTION:turn_on|entity_id ou ACTION:turn_off|entity_id
-    2. Para CRIAR CENA (script no HA): ACTION:create_scene|id_unico烬 Nome烬 JSON_AÇÕES
-    3. Para CRIAR AUTOMAÇÃO: ACTION:create_auto|id_unico烬 Nome烬 JSON_TRIGGER烬 JSON_ACTIONS
-    4. O JSON deve ser válido e sem quebras de linha.
-    5. Para monitorar: ACTION:monitor_start|entity_id|mensagem
-    6. Para parar monitoramento: ACTION:monitor_stop|entity_id
-    7. Para Telegram: ACTION:telegram.send_message|texto
-    8. Para foto: ACTION:camera_capture|entity_id|photo
-    9. Para estado: ACTION:get_state|entity_id
+     1. Para LIGAR/DESLIGAR: ACTION:comando|entity_id
+    2. Para CRIAR CENA: ACTION:create_scene|id_unico|Nome Amigável|JSON_LISTA_DE_ACOES
+    3. Para CRIAR AUTOMAÇÃO: ACTION:create_auto|id_unico|JSON_COMPLETO
+    (O JSON deve conter as chaves "alias", "trigger", "action" no padrão oficial do Home Assistant)
+    4. Use o símbolo "|" para separar as partes da ACTION, nunca ":" após o comando.
+    5. Se o usuário for vago ("elas", "as luzes"), use o contexto para decidir.
+    6. Se o usuário quiser ATIVAR uma cena já existente, responda: ACTION::script.turn_on|script.nome_da_cena
+    7. Se o usuário pedir para ser notificado sobre um evento futuro (ex: 'me avise quando...'), responda: ACTION:monitor_start|entity_id|mensagem_de_alerta
+    8. Para PARAR de monitorar: ACTION:monitor_stop|entity_id
+    9. Para enviar QUALQUER informação, lista ou relatório ao Telegram: ACTION:telegram.send_message|Texto formatado aqui
+    10. Se o usuário solicitar uma informação (lista, status, histórico) e mencionar "Telegram", você DEVE usar ACTION:telegram.send_message| seguido de todo o texto informativo formatado de forma amigável.
+    11. Não diga "Não consigo enviar", pois você tem a ferramenta telegram.send_message para isso. Se for enviar uma lista, escreva a lista inteira na sua resposta e depois coloque a ACTION no final.
+    12. TELEGRAM E MEMÓRIA: Se o usuário pedir para enviar algo para o Telegram (como uma lista ou relatório que você acabou de falar na memória recente), VOCÊ NÃO PODE apenas dizer "Aqui está a lista". Você DEVE REESCREVER a lista inteira, com todos os tópicos e dados na sua resposta atual, e na ÚLTIMA LINHA colocar ACTION:telegram.send_message|enviar.
+    >>> REGRAS ESTRITAS DE NOTIFICAÇÃO E TELEGRAM <<<
+    13. MONITORAMENTO (Avisos futuros): Se o usuário pedir "me avise quando...", "me notifique sempre que...", VOCÊ DEVE USAR APENAS: ACTION:monitor_start|entity_id|Sua mensagem personalizada aqui. 
+   14. AUTOMAÇÕES COM MENSAGEM: Se o usuário quiser uma automação que envie algo pelo Telegram, VOCÊ DEVE colocar isso como uma ação dentro do JSON da automação, usando um destes serviços oficiais:
+        - Para texto: "service": "telegram_bot.send_message", "data": {"message": "Texto aqui"}
+        - Para foto: "service": "telegram_bot.send_photo", "data": {"url": "URL_DA_CAMERA", "caption": "Texto"}
+        - Para vídeo: "service": "telegram_bot.send_video"
+    15. O comando ACTION:telegram.send_message| e ACTION:camera_capture| são estritamente para respostas IMEDIATAS da nossa conversa. NUNCA os coloque dentro de um JSON de automação ou cena.
+    16. TELEGRAM IMEDIATO (Envio de informações de agora): Se o usuário pedir para enviar uma lista, status, histórico de agora para o Telegram, você DEVE escrever todo o texto formatado na sua resposta e na ÚLTIMA LINHA colocar OBRIGATORIAMENTE: ACTION:telegram.send_message|enviar.
+    17. O serviço telegram.send_message não existe dentro do Home Assistant, é uma ferramenta sua. Nunca o coloque dentro de um JSON de automação.
+    18. Se o usuário pedir para enviar algo para o Telegram da memória recente, você DEVE reescrever a informação completa antes da ACTION, não seja vago.
+    19. Para tirar foto ou gravar vídeo de uma câmera,responda: ACTION:camera_capture|entity_id|media_type (onde media_type é 'photo' ou 'video').
+    20. Para CONSULTAR o estado de qualquer dispositivo, use: ACTION:get_state|entity_id
+    21. RACIOCÍNIO LÓGICO: Quando o usuário perguntar sobre algo ("está ligado?", "está aberto?"), use ACTION:get_state antes de responder. Não invente respostas - consulte o estado real primeiro.
     """
 
     # --- A CHAMADA DA IA ---
@@ -87,6 +104,8 @@ DIRETRIZES:
                 # 1. Limpa a linha e separa os campos
                 comando_puro = linha.replace("ACTION:", "").strip()
                 parts = [p.strip() for p in comando_puro.split("|")]
+
+                print(f"--- [DEBUG IA] O agente enviou exatamente isto: {parts} ---")
                 
                 if len(parts) >= 2:
                     action = parts[0]
@@ -94,19 +113,33 @@ DIRETRIZES:
 
                     # --- LÓGICA DE EXECUÇÃO ---
 
-                    #  Criação de Automação
-                    if action == "create_auto" and len(parts) >= 5:
-                        print(f"--- [LOG] Solicitando Criação de Automação ao HA: {parts[2]} ---")
-                        print(f"--- [DEBUG] Trigger: {parts[3]} | Action: {parts[4]} ---")
-                        res = create_automation(parts[1], parts[2], parts[3], parts[4])
-                        resultados.append(res)
-                        
+                   # Criação de Automação (Padrão Oficial)
+                    if action == "create_auto":
+                        if len(parts) >= 3:
+                            auto_id = parts[1]
+                            json_str = parts[2]
+                            
+                            print(f"--- [LOG] Enviando Automação '{auto_id}' para o HA ---")
+                            res = create_automation(auto_id, json_str)
+                            resultados.append(res)
+                        else:
+                            erro_msg = f"Erro de sintaxe da IA: Recebeu {len(parts)} parâmetros, esperava 3."
+                            print(f"--- [ERRO] {erro_msg} ---")
+                            resultados.append(erro_msg)
+                            
                     # Criação de Cena (Script)
-                    elif action == "create_scene" and len(parts) >= 4:
-                        print(f"--- [LOG] Solicitando Criação de Cena ao HA: {parts[2]} ---")
-                        print(f"--- [DEBUG] Ações: {parts[3]} ---")
-                        res = create_script(parts[1], parts[2], parts[3])
-                        resultados.append(res)
+                    elif action == "create_scene":
+                        if len(parts) >= 4:
+                            print(f"--- [LOG] Solicitando Criação de Cena ao HA: {parts[2]} ---")
+                            print(f"--- [DEBUG] Ações: {parts[3]} ---")
+                            res = create_script(parts[1], parts[2], parts[3])
+                            resultados.append(res)
+                        else:
+                            erro_msg = f"Erro de sintaxe da IA: A cena requer 4 parâmetros, mas recebeu {len(parts)}."
+                            print(f"--- [ERRO] {erro_msg} ---")
+                            resultados.append(erro_msg)
+
+                        print(f"--- [DEBUG IA] O agente enviou exatamente isto: {parts} ---")
 
                     # comunicação com telegram
                     elif action == "telegram.send_message":

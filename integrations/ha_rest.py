@@ -44,23 +44,33 @@ def clean_json(text):
     """Limpa o lixo que a IA pode mandar junto com o JSON."""
     return text.replace("```json", "").replace("```", "").replace("'", '"').strip()
 
-def create_automation(automation_id, name, trigger_str, action_str):
+def create_automation(automation_id, json_payload_str):
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api/config/automation/config/{automation_id}"
     try:
-        trigger_clean = clean_json(trigger_str)
-        action_clean = clean_json(action_str)
+        # Limpa qualquer lixo ou formatação (ex: ```json) da IA
+        payload_clean = clean_json(json_payload_str)
         
-        payload = {
-            "alias": name,
-            "trigger": json.loads(trigger_clean),
-            "action": json.loads(action_clean),
-            "mode": "single"
-        }
-        r = requests.put(url, headers=headers, json=payload, timeout=15)
+        # Converte a string JSON para um dicionário Python
+        payload = json.loads(payload_clean)
+        
+        # Força o modo "single" por segurança, caso a IA esqueça
+        if "mode" not in payload:
+            payload["mode"] = "single"
+            
+        print(f"--- [DEBUG HA] Criando automação {automation_id} ---")
+        
+        # O Home Assistant usa POST neste endpoint para criar e atualizar configs
+        r = requests.post(url, headers=headers, json=payload, timeout=15)
         r.raise_for_status()
-        return f"Automação '{name}' criada com sucesso!"
+        
+        # Pega o alias de dentro do JSON da IA (ou usa o ID se ela não mandar)
+        alias = payload.get("alias", automation_id)
+        return f"Automação '{alias}' criada com sucesso no Padrão Oficial!"
+        
+    except json.JSONDecodeError as e:
+        return f"Erro ao decodificar o JSON gerado pela IA: {e}\nPayload: {json_payload_str}"
     except Exception as e:
-        return f"Erro ao criar automação: {e}\nJSON: {action_str}"
+        return f"Erro na comunicação com Home Assistant: {e}\nPayload: {json_payload_str}"
 
 def create_script(script_id, name, sequence_str):
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api/config/script/config/{script_id}"
