@@ -7,89 +7,91 @@ from config import AGENT_NAME, HOME_ASSISTANT_URL
 async def tool_camera_capture(entity_id: str, media_type: str) -> str:
     """
     Captura foto ou vídeo via HA e envia pelo Telegram usando o backend como intermediário.
-    Usa HAService já existente no projeto — sem criar novas conexões.
     """
     ha = HAService()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     cam_slug = entity_id.split(".")[-1]
 
     if media_type == "photo":
-        result = await ha.take_snapshot(entity_id)
-        if result.get("status") != "success":
-            return f"Falha ao capturar foto de {entity_id}."
+        print(f"--- [DEBUG] Iniciando captura de FOTO para {entity_id} ---")
+        
+        # 1. Opcional: Ainda manda salvar na galeria do HA para ficar de histórico (backup)
+        await ha.take_snapshot(entity_id)
+        
+        # 2. Pega a foto diretamente na memória usando a sua própria função get_camera_image!
+        try:
+            image_bytes = await ha.get_camera_image(entity_id)
+            if image_bytes:
+                tmp_path = f"/tmp/{cam_slug}_{timestamp}.jpg"
+                with open(tmp_path, "wb") as f:
+                    f.write(image_bytes)
+                
+                print(f"--- [DEBUG] Foto salva em {tmp_path}, enviando ao Telegram... ---")
+                send_telegram_photo(
+                    tmp_path,
+                    caption=f" {AGENT_NAME}: Foto da câmera {cam_slug}"
+                )
+                return f"Foto de {entity_id} enviada com sucesso."
+            else:
+                print("--- [ERRO] get_camera_image retornou vazio. ---")
+        except Exception as e:
+            print(f"--- [ERRO] Falha ao pegar frame da câmera: {e} ---")
 
-        # Aguarda o HA salvar no disco
-        await asyncio.sleep(3)
-
-        # Busca o frame atual via proxy para enviar pelo Telegram
-        import httpx
-        stream_info = await ha.get_live_stream_url(entity_id)
-        if stream_info:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(stream_info["frame_url"], timeout=10.0)
-                if resp.status_code == 200:
-                    # Salva temporariamente e envia
-                    tmp_path = f"/tmp/{cam_slug}_{timestamp}.jpg"
-                    with open(tmp_path, "wb") as f:
-                        f.write(resp.content)
-                    send_telegram_photo(
-                        tmp_path,
-                        caption=f"📸 {AGENT_NAME}: Foto da câmera {cam_slug}"
-                    )
-                    return f"Foto de {entity_id} capturada e enviada ao Telegram."
-
-        return f"Foto salva em {result.get('saved_path')} mas não foi possível enviar ao Telegram."
+        return f"Falha ao processar a foto de {entity_id}."
 
     elif media_type == "video":
-        result = await ha.start_recording(entity_id, duration=30)
+        duracao_video = 8  # Grava 8 segundos (Tempo perfeito para automações rápidas)
+        tempo_espera = duracao_video + 3  # Espera a gravação + 3s pro HA salvar no disco
+        
+        print(f"--- [DEBUG] Iniciando gravação de {duracao_video}s em {entity_id} ---")
+        result = await ha.start_recording(entity_id, duration=duracao_video)
         
         if result.get("status") == "recording_started":
             send_telegram_message(
-                f"🎥 {AGENT_NAME}: Gravação iniciada. Aguardando {30}s para finalizar..."
+                f" {AGENT_NAME}: Câmera ativada. Gravando clipe de {duracao_video}s..."
             )
             
-            await asyncio.sleep(35)
+            # A Pausa Mágica para não puxar o vídeo antigo!
+            await asyncio.sleep(tempo_espera)
             
             print(f"--- [DEBUG] Buscando vídeo mais recente de {entity_id} ---")
             latest_video = await ha.get_latest_video(entity_id)
-            print(f"--- [DEBUG] Vídeo encontrado: {latest_video} ---")
             
             if latest_video:
                 import httpx
-                from config import HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN
+                from config import HOME_ASSISTANT_TOKEN
                 
+                # Usa a URL da pasta local do HA que permite download via API
                 filename = latest_video['title']
-                video_url = f"{HOME_ASSISTANT_URL.rstrip('/')}/media/local/edgehome_records/{filename}"
-                
-                print(f"--- [DEBUG] Baixando de: {video_url} ---")
+                video_url = f"{ha.url}/media/local/edgehome_records/{filename}"
+                print(f"--- [DEBUG] Baixando clipe de: {video_url} ---")
                 
                 headers = {"Authorization": f"Bearer {HOME_ASSISTANT_TOKEN}"}
                 
                 try:
                     async with httpx.AsyncClient() as client:
-                        resp = await client.get(video_url, headers=headers, timeout=60.0)
+                        resp = await client.get(video_url, headers=headers, timeout=30.0)
                         print(f"--- [DEBUG] Status HTTP: {resp.status_code} ---")
                         
                         if resp.status_code == 200:
+                            filename = latest_video['title']
                             tmp_path = f"/tmp/{filename}"
                             with open(tmp_path, "wb") as f:
                                 f.write(resp.content)
-                            print(f"--- [DEBUG] Arquivo salvo em: {tmp_path} ---")
+                            print(f"--- [DEBUG] Arquivo salvo em: {tmp_path}, enviando! ---")
                             
                             send_telegram_video(
                                 tmp_path,
-                                caption=f"🎥 Vídeo da câmera {entity_id}"
+                                caption=f"🎥 Vídeo capturado: {cam_slug}"
                             )
-                            return f"Vídeo de {entity_id} capturado e enviado ao Telegram."
+                            return f"Vídeo de {entity_id} enviado."
                         else:
-                            print(f"--- [ERRO] Falha no download. HA retornou: {resp.status_code} ---")
-                            print(f"--- [DEBUG] Conteúdo do erro: {resp.text} ---")
-                            
+                            print(f"--- [ERRO] HA retornou: {resp.status_code} - {resp.text} ---")
                 except Exception as e:
-                    print(f"--- [ERRO FATAL] Erro ao baixar vídeo: {e} ---")
+                    print(f"--- [ERRO FATAL] Erro na rede ao baixar vídeo: {e} ---")
             else:
-                print(f"--- [ERRO] Nenhum vídeo encontrado na galeria ---")
-        
-        return f"Falha ao iniciar gravação em {entity_id}."
+                print(f"--- [ERRO] Nenhum vídeo encontrado na galeria após a pausa. ---")
+                
+        return f"Falha ao finalizar o vídeo de {entity_id}."
 
     return f"Tipo de mídia '{media_type}' não reconhecido. Use 'photo' ou 'video'."

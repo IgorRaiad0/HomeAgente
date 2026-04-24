@@ -52,10 +52,11 @@ async def handle_command(user_input):
     {memoria_recente}
 
 DIRETRIZES:
-     1. Para LIGAR/DESLIGAR: ACTION:comando|entity_id
-    2. Para CRIAR CENA: ACTION:create_scene|id_unico|Nome Amigável|JSON_LISTA_DE_ACOES
+    1. Para LIGAR/DESLIGAR: ACTION:comando|entity_id
+    2. Para CRIAR CENA (SCRIPT): ACTION:create_scene|id_unico|JSON_COMPLETO
+    (Use para ações MANUAIS. Cenas NÃO têm gatilho. O JSON deve conter "alias" e "sequence". OBRIGATÓRIO: O JSON DEVE SER ESCRITO EM UMA ÚNICA LINHA, SEM QUEBRAS DE LINHA).
     3. Para CRIAR AUTOMAÇÃO: ACTION:create_auto|id_unico|JSON_COMPLETO
-    (O JSON deve conter as chaves "alias", "trigger", "action" no padrão oficial do Home Assistant)
+    (Use para ações CONDICIONAIS. Automações OBRIGATORIAMENTE têm gatilho. O JSON deve conter "alias", "trigger" e "action". OBRIGATÓRIO: O JSON DEVE SER ESCRITO EM UMA ÚNICA LINHA, SEM QUEBRAS DE LINHA).
     4. Use o símbolo "|" para separar as partes da ACTION, nunca ":" após o comando.
     5. Se o usuário for vago ("elas", "as luzes"), use o contexto para decidir.
     6. Se o usuário quiser ATIVAR uma cena já existente, responda: ACTION::script.turn_on|script.nome_da_cena
@@ -67,10 +68,13 @@ DIRETRIZES:
     12. TELEGRAM E MEMÓRIA: Se o usuário pedir para enviar algo para o Telegram (como uma lista ou relatório que você acabou de falar na memória recente), VOCÊ NÃO PODE apenas dizer "Aqui está a lista". Você DEVE REESCREVER a lista inteira, com todos os tópicos e dados na sua resposta atual, e na ÚLTIMA LINHA colocar ACTION:telegram.send_message|enviar.
     >>> REGRAS ESTRITAS DE NOTIFICAÇÃO E TELEGRAM <<<
     13. MONITORAMENTO (Avisos futuros): Se o usuário pedir "me avise quando...", "me notifique sempre que...", VOCÊ DEVE USAR APENAS: ACTION:monitor_start|entity_id|Sua mensagem personalizada aqui. 
-   14. AUTOMAÇÕES COM MENSAGEM: Se o usuário quiser uma automação que envie algo pelo Telegram, VOCÊ DEVE colocar isso como uma ação dentro do JSON da automação, usando um destes serviços oficiais:
-        - Para texto: "service": "telegram_bot.send_message", "data": {"message": "Texto aqui"}
-        - Para foto: "service": "telegram_bot.send_photo", "data": {"url": "URL_DA_CAMERA", "caption": "Texto"}
-        - Para vídeo: "service": "telegram_bot.send_video"
+    14. FOTOS E VÍDEOS EM CENAS/AUTOMAÇÕES: Para enviar mídia pelo Telegram dentro de um JSON (forma autônoma), você DEVE colocar DUAS ações em sequência:
+        - Para FOTO: 
+          Ação 1: {{"service": "camera.snapshot", "target": {{"entity_id": "NOME_DA_SUA_CAMERA"}}, "data": {{"filename": "/config/www/foto_auto.jpg"}}}}
+          Ação 2: {{"service": "telegram_bot.send_photo", "data": {{"file": "/config/www/foto_auto.jpg", "caption": "Foto capturada automaticamente!"}}}}
+        - Para VÍDEO:
+          Ação 1: {{"service": "camera.record", "target": {{"entity_id": "NOME_DA_SUA_CAMERA"}}, "data": {{"filename": "/config/www/video_auto.mp4", "duration": 5}}}}
+          Ação 2: {{"service": "telegram_bot.send_video", "data": {{"file": "/config/www/video_auto.mp4", "caption": "Vídeo gravado automaticamente!"}}}}
     15. O comando ACTION:telegram.send_message| e ACTION:camera_capture| são estritamente para respostas IMEDIATAS da nossa conversa. NUNCA os coloque dentro de um JSON de automação ou cena.
     16. TELEGRAM IMEDIATO (Envio de informações de agora): Se o usuário pedir para enviar uma lista, status, histórico de agora para o Telegram, você DEVE escrever todo o texto formatado na sua resposta e na ÚLTIMA LINHA colocar OBRIGATORIAMENTE: ACTION:telegram.send_message|enviar.
     17. O serviço telegram.send_message não existe dentro do Home Assistant, é uma ferramenta sua. Nunca o coloque dentro de um JSON de automação.
@@ -78,6 +82,10 @@ DIRETRIZES:
     19. Para tirar foto ou gravar vídeo de uma câmera,responda: ACTION:camera_capture|entity_id|media_type (onde media_type é 'photo' ou 'video').
     20. Para CONSULTAR o estado de qualquer dispositivo, use: ACTION:get_state|entity_id
     21. RACIOCÍNIO LÓGICO: Quando o usuário perguntar sobre algo ("está ligado?", "está aberto?"), use ACTION:get_state antes de responder. Não invente respostas - consulte o estado real primeiro.
+    22. Para TRANSMITIR a imagem de uma câmera na TV: ACTION:stream_camera|entity_id_da_camera|entity_id_da_tv
+    22. Para TRANSMITIR a imagem de uma câmera na TV, use: ACTION:stream_camera|entity_id_da_camera|media_player.sala_de_tv
+    23. Para TRANSMITIR a imagem de uma câmera na TV, use: ACTION:stream_camera|entity_id_da_camera|media_player.sala_de_tv
+    (ATENÇÃO: Sempre use 'media_player.sala_de_tv' como alvo. Ignore entidades com _2 ou _3. IGNORE completamente se o status da TV estiver 'off', pois ela liga automaticamente ao receber o vídeo. Não relate falhas de comunicação, apenas confirme a ação com confiança! em sua resposta para o usuário)
     """
 
     # --- A CHAMADA DA IA ---
@@ -127,19 +135,19 @@ DIRETRIZES:
                             print(f"--- [ERRO] {erro_msg} ---")
                             resultados.append(erro_msg)
                             
-                    # Criação de Cena (Script)
+                    # Criação de Cena (Padrão Oficial HA)
                     elif action == "create_scene":
-                        if len(parts) >= 4:
-                            print(f"--- [LOG] Solicitando Criação de Cena ao HA: {parts[2]} ---")
-                            print(f"--- [DEBUG] Ações: {parts[3]} ---")
-                            res = create_script(parts[1], parts[2], parts[3])
+                        if len(parts) >= 3:
+                            scene_id = parts[1]
+                            json_str = parts[2]
+                            
+                            print(f"--- [LOG] Enviando Cena '{scene_id}' para o HA ---")
+                            res = create_script(scene_id, json_str)
                             resultados.append(res)
                         else:
-                            erro_msg = f"Erro de sintaxe da IA: A cena requer 4 parâmetros, mas recebeu {len(parts)}."
+                            erro_msg = f"Erro de sintaxe da IA na Cena: Recebeu {len(parts)} parâmetros, esperava 3."
                             print(f"--- [ERRO] {erro_msg} ---")
                             resultados.append(erro_msg)
-
-                        print(f"--- [DEBUG IA] O agente enviou exatamente isto: {parts} ---")
 
                     # comunicação com telegram
                     elif action == "telegram.send_message":
@@ -190,6 +198,33 @@ DIRETRIZES:
                         asyncio.create_task(tool_camera_capture(target_clean, media_type))
                             
                         return f"Certamente! Solicitada a captura de {media_type} na câmera. A mídia chegará no seu Telegram em instantes."
+                    
+                    # Transmissão de Câmera na TV
+                    # Transmissão de Câmera na TV
+                    elif action == "stream_camera" and len(parts) >= 3:
+                        camera_id = target.split(" ")[0].split("\n")[0].strip()
+                        tv_id = parts[2].strip()
+                        
+                        print(f"--- [LOG] Solicitando stream da {camera_id} para {tv_id} ---")
+                        
+                        from integrations.camera_service import HAService
+                        ha = HAService()
+                        
+                        # Espelhando exatamente o que você descobriu no YAML
+                        payload = {
+                            "entity_id": camera_id,
+                            "media_player": tv_id,
+                            "format": "hls"
+                        }
+                        
+                        # Executa o serviço de forma assíncrona
+                        try:
+                            await ha.call_service("camera", "play_stream", payload)
+                        except Exception as e:
+                            print(f"--- [ERRO] Falha ao enviar stream: {e} ---")
+                            return "Desculpe, senhor. Houve um erro ao tentar transmitir a câmera para a TV."
+                            
+                        return f"Certamente, senhor. Iniciando a transmissão da câmera na sua TV."
 
                     # Execução de Comandos (Universal: Luz, Ar, TV, Scripts)
                     else:
@@ -204,6 +239,8 @@ DIRETRIZES:
                             res = call_service(domain, action, target_clean)
                         
                         resultados.append(res)
+
+                    
         
         # --- RETORNO INTELIGENTE ---
         # Se houve um texto antes da ACTION, priorizamos mostrar esse texto (ex: listas, explicações)

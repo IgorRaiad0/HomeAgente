@@ -72,21 +72,30 @@ def create_automation(automation_id, json_payload_str):
     except Exception as e:
         return f"Erro na comunicação com Home Assistant: {e}\nPayload: {json_payload_str}"
 
-def create_script(script_id, name, sequence_str):
+def create_script(script_id, json_sequence_str):
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api/config/script/config/{script_id}"
     try:
-        seq_clean = clean_json(sequence_str)
+        # Limpa qualquer formatação markdown da IA
+        seq_clean = clean_json(json_sequence_str)
         
-        payload = {
-            "alias": name,
-            "sequence": json.loads(seq_clean),
-            "mode": "single"
-        }
-        r = requests.put(url, headers=headers, json=payload, timeout=15)
+        # Converte para dicionário
+        payload = json.loads(seq_clean)
+        
+        # Força o modo "single"
+        if "mode" not in payload:
+            payload["mode"] = "single"
+            
+        print(f"--- [DEBUG HA] Criando cena/script {script_id} ---")
+        
+        r = requests.post(url, headers=headers, json=payload, timeout=15)
         r.raise_for_status()
-        return f"Cena/Script '{name}' criado!"
+        
+        alias = payload.get("alias", script_id)
+        return f"Cena '{alias}' criada com sucesso no Padrão Oficial!"
+        
+    except json.JSONDecodeError as e:
+        return f"Erro ao decodificar o JSON da Cena gerado pela IA: {e}\nPayload: {json_sequence_str}"
     except Exception as e:
-        return f"Erro ao criar cena: {e}\nJSON: {sequence_str}"
-    
+        return f"Erro na comunicação com Home Assistant: {e}\nPayload: {json_sequence_str}"
 
 
