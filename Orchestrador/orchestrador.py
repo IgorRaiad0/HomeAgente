@@ -52,6 +52,7 @@ async def handle_command(user_input):
     {memoria_recente}
 
 DIRETRIZES:
+    
     1. Para LIGAR/DESLIGAR: ACTION:comando|entity_id
     2. Para CRIAR CENA (SCRIPT): ACTION:create_scene|id_unico|JSON_COMPLETO
     (Use para ações MANUAIS. Cenas NÃO têm gatilho. O JSON deve conter "alias" e "sequence". OBRIGATÓRIO: O JSON DEVE SER ESCRITO EM UMA ÚNICA LINHA, SEM QUEBRAS DE LINHA).
@@ -86,6 +87,9 @@ DIRETRIZES:
     22. Para TRANSMITIR a imagem de uma câmera na TV, use: ACTION:stream_camera|entity_id_da_camera|media_player.sala_de_tv
     23. Para TRANSMITIR a imagem de uma câmera na TV, use: ACTION:stream_camera|entity_id_da_camera|media_player.sala_de_tv
     (ATENÇÃO: Sempre use 'media_player.sala_de_tv' como alvo. Ignore entidades com _2 ou _3. IGNORE completamente se o status da TV estiver 'off', pois ela liga automaticamente ao receber o vídeo. Não relate falhas de comunicação, apenas confirme a ação com confiança! em sua resposta para o usuário)
+    24. Para LIGAR um dispositivo, use SEMPRE a ação turn_on. Exemplo: ACTION:turn_on|switch.quartoigor_switch_1
+    25. Para DESLIGAR um dispositivo, use SEMPRE a ação turn_off. Exemplo: ACTION:turn_off|switch.quartoigor_switch_1
+    26. NUNCA use a palavra "comando" como ação. Use sempre os serviços oficiais do Home Assistant (turn_on, turn_off, toggle).
     """
 
     # --- A CHAMADA DA IA ---

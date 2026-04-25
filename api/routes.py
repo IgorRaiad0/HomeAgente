@@ -60,7 +60,7 @@ async def voice_endpoint(file: UploadFile = File(...)):
         resposta_agente = await handle_command(texto_usuario)
         
         # 4. Apaga o arquivo temporário para não lotar o PC
-        # os.remove(caminho_temp)
+        os.remove(caminho_temp)
 
         return ChatResponse(resposta=resposta_agente)
 
