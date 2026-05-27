@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+httpx
+websockets
+requests
+openai
+anthropic
+chromadb
+python-dotenv
